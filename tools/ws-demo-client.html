@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Realtime Notes WS Demo</title>
+  <style>
+    :root {
+      --bg: #0b1320;
+      --panel: #101a2b;
+      --panel-2: #152239;
+      --text: #e6eefc;
+      --muted: #9db0d1;
+      --ok: #2ed47a;
+      --warn: #ffcc66;
+      --err: #ff6b6b;
+      --border: #243758;
+      --accent: #4ea1ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: radial-gradient(circle at top right, #1d3257, var(--bg));
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .card {
+      background: linear-gradient(160deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    h1,
+    h2 {
+      margin: 0 0 12px 0;
+    }
+
+    h1 {
+      font-size: 20px;
+    }
+
+    h2 {
+      font-size: 15px;
+      color: var(--muted);
+    }
+
+    label {
+      display: block;
+      margin: 10px 0 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    input,
+    textarea,
+    button {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: inherit;
+      color: var(--text);
+      background: #0d1627;
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+    }
+
+    button {
+      cursor: pointer;
+      background: #12325f;
+    }
+
+    button:hover {
+      background: #18457f;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--warn);
+    }
+
+    .ok {
+      color: var(--ok);
+    }
+
+    .err {
+      color: var(--err);
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0b1422;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 250px;
+      max-height: 400px;
+      overflow: auto;
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 900px) {
+      .wrap {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card full">
+      <h1>Realtime Notes WebSocket Demo</h1>
+      <div id="status" class="status">Disconnected</div>
+    </div>
+
+    <div class="card">
+      <h2>Connection</h2>
+      <label for="serverUrl">Server URL</label>
+      <input id="serverUrl" value="http://localhost:3000" />
+
+      <label for="token">JWT Token</label>
+      <input id="token" placeholder="Paste a valid JWT token" />
+
+      <div class="row" style="margin-top: 10px">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn">Disconnect</button>
+      </div>
+
+      <label for="roomName">Room Name</label>
+      <input id="roomName" value="test-room" />
+
+      <div class="row" style="margin-top: 10px">
+        <button id="joinBtn">Join Room</button>
+        <button id="snapshotBtn">Get Snapshot</button>
+      </div>
+
+      <div class="hint">
+        Use two browser tabs with the same room to verify real-time sync.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Note Editor</h2>
+      <label for="clientVersion">Client Version</label>
+      <input id="clientVersion" type="number" value="0" min="0" />
+
+      <label for="noteContent">Content</label>
+      <textarea id="noteContent" placeholder="Type note content here"></textarea>
+
+      <div class="row" style="margin-top: 10px">
+        <button id="updateBtn">Send update_note</button>
+        <button id="syncVersionBtn">Use Latest Version</button>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>Event Log</h2>
+      <pre id="log"></pre>
+    </div>
+  </div>
+
+  <script>
+    let socket = null;
+    let latestVersion = 0;
+
+    const ui = {
+      status: document.getElementById('status'),
+      log: document.getElementById('log'),
+      serverUrl: document.getElementById('serverUrl'),
+      token: document.getElementById('token'),
+      roomName: document.getElementById('roomName'),
+      clientVersion: document.getElementById('clientVersion'),
+      noteContent: document.getElementById('noteContent'),
+      connectBtn: document.getElementById('connectBtn'),
+      disconnectBtn: document.getElementById('disconnectBtn'),
+      joinBtn: document.getElementById('joinBtn'),
+      snapshotBtn: document.getElementById('snapshotBtn'),
+      updateBtn: document.getElementById('updateBtn'),
+      syncVersionBtn: document.getElementById('syncVersionBtn'),
+    };
+
+    function logEvent(event, payload) {
+      const stamp = new Date().toISOString();
+      const line = `[${stamp}] ${event}\n${JSON.stringify(payload ?? {}, null, 2)}\n\n`;
+      ui.log.textContent = line + ui.log.textContent;
+    }
+
+    function setStatus(text, kind) {
+      ui.status.textContent = text;
+      ui.status.className = `status ${kind || ''}`;
+    }
+
+    function updateVersion(v) {
+      if (typeof v !== 'number') return;
+      latestVersion = v;
+      ui.clientVersion.value = String(v);
+    }
+
+    function ensureSocket() {
+      if (!socket) {
+        alert('Connect first');
+        return false;
+      }
+      return true;
+    }
+
+    ui.connectBtn.addEventListener('click', () => {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+
+      const url = ui.serverUrl.value.trim();
+      const token = ui.token.value.trim();
+
+      if (!url || !token) {
+        alert('Server URL and JWT token are required.');
+        return;
+      }
+
+      socket = io(url, {
+        query: { token },
+        transports: ['websocket'],
+      });
+
+      socket.on('connect', () => {
+        setStatus(`Connected (${socket.id})`, 'ok');
+        logEvent('socket.connect', { socketId: socket.id });
+      });
+
+      socket.on('connect_error', (err) => {
+        setStatus(`Connect error: ${err.message}`, 'err');
+        logEvent('socket.connect_error', { message: err.message });
+      });
+
+      socket.on('disconnect', (reason) => {
+        setStatus(`Disconnected: ${reason}`, 'err');
+        logEvent('socket.disconnect', { reason });
+      });
+
+      socket.on('connected', (payload) => {
+        logEvent('connected', payload);
+      });
+
+      socket.on('disconnected', (payload) => {
+        logEvent('disconnected', payload);
+      });
+
+      socket.on('note_updated', (payload) => {
+        logEvent('note_updated', payload);
+        if (typeof payload.content === 'string') {
+          ui.noteContent.value = payload.content;
+        }
+        updateVersion(payload.version);
+      });
+
+      socket.on('note_conflict', (payload) => {
+        logEvent('note_conflict', payload);
+        if (typeof payload.latestContent === 'string') {
+          ui.noteContent.value = payload.latestContent;
+        }
+        updateVersion(payload.latestVersion);
+      });
+    });
+
+    ui.disconnectBtn.addEventListener('click', () => {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+        setStatus('Disconnected');
+      }
+    });
+
+    ui.joinBtn.addEventListener('click', () => {
+      if (!ensureSocket()) return;
+
+      const roomName = ui.roomName.value.trim();
+      socket.emit('join_room', { roomName }, (ack) => {
+        logEvent('ack.join_room', ack);
+      });
+    });
+
+    ui.snapshotBtn.addEventListener('click', () => {
+      if (!ensureSocket()) return;
+
+      const roomName = ui.roomName.value.trim();
+      socket.emit('get_note_snapshot', { roomName }, (ack) => {
+        logEvent('ack.get_note_snapshot', ack);
+        if (ack && ack.data) {
+          if (typeof ack.data.content === 'string') {
+            ui.noteContent.value = ack.data.content;
+          }
+          updateVersion(ack.data.version);
+        }
+      });
+    });
+
+    ui.updateBtn.addEventListener('click', () => {
+      if (!ensureSocket()) return;
+
+      const roomName = ui.roomName.value.trim();
+      const content = ui.noteContent.value;
+      const clientVersion = Number(ui.clientVersion.value);
+
+      socket.emit(
+        'update_note',
+        { roomName, content, clientVersion },
+        (ack) => {
+          logEvent('ack.update_note', ack);
+          if (ack && ack.data && typeof ack.data.version === 'number') {
+            updateVersion(ack.data.version);
+          }
+        },
+      );
+    });
+
+    ui.syncVersionBtn.addEventListener('click', () => {
+      ui.clientVersion.value = String(latestVersion);
+    });
+  </script>
+</body>
+
+</html>

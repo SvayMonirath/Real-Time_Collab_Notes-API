@@ -23,6 +23,7 @@ model Room {
   name      String
 
   members   RoomMember[]
+  notes     Note[]
 
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
@@ -31,6 +32,8 @@ model Room {
 model RoomMember {
   id        String   @id @default(uuid())
 
+  // userId references users from the external authentication service
+  // (not stored in this database for separation of concerns)
   userId    String
   roomId    String
 
@@ -39,4 +42,16 @@ model RoomMember {
   room      Room     @relation(fields: [roomId], references: [id])
 
   createdAt DateTime @default(now())
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  roomId    String
+  content   String   @default("")
+  version   Int      @default(0)
+
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
