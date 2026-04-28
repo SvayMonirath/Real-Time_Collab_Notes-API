@@ -1,6 +1,6 @@
 import { RoomService } from 'src/service/room.service';
-import { NoteService } from 'src/service/note.service';
 import { SocketAuthMiddleware } from 'src/middleware/socket-auth.middleware';
+import { NoteRepository } from 'src/repository/note.repository';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -10,10 +10,27 @@ import {
   WebSocketServer,
   WsException,
 } from '@nestjs/websockets';
+import { Note } from 'generated/prisma/client';
 import { Server, Socket } from 'socket.io';
 
 type RoomLookupPayload = {
   roomName?: string;
+};
+
+type SocketData = {
+  userId?: string;
+};
+
+type ConnectedUser = {
+  socketId: string;
+  userId?: string;
+};
+
+type RoomResponse = {
+  data: {
+    id: string;
+    name: string;
+  };
 };
 
 type UpdateNotePayload = RoomLookupPayload & {
@@ -32,9 +49,11 @@ type GetNoteSnapshotPayload = RoomLookupPayload;
 export class NoteGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
+  private readonly roomMembers = new Map<string, ConnectedUser[]>();
+
   constructor(
     private readonly roomService: RoomService,
-    private readonly noteService: NoteService,
+    private readonly noteRepository: NoteRepository,
     private readonly socketAuthMiddleware: SocketAuthMiddleware,
   ) {}
 
@@ -51,7 +70,8 @@ export class NoteGateway
 
       try {
         const payload = this.socketAuthMiddleware.validateToken(token);
-        (socket.data as any).userId = payload.userId;
+        const socketData = socket.data as SocketData;
+        socketData.userId = payload.userId;
         next();
       } catch (error) {
         next(error as Error);
@@ -60,13 +80,35 @@ export class NoteGateway
   }
 
   handleConnection(client: Socket) {
+    const socketData = client.data as SocketData;
     client.emit('connected', {
       socketId: client.id,
-      userId: (client.data as any).userId,
+      userId: socketData.userId,
     });
   }
 
   handleDisconnect(client: Socket) {
+    for (const [roomId, members] of this.roomMembers.entries()) {
+      const nextMembers = members.filter(
+        (member) => member.socketId !== client.id,
+      );
+
+      if (nextMembers.length === members.length) {
+        continue;
+      }
+
+      if (nextMembers.length === 0) {
+        this.roomMembers.delete(roomId);
+      } else {
+        this.roomMembers.set(roomId, nextMembers);
+      }
+
+      this.server.to(roomId).emit('room_presence', {
+        roomId,
+        members: nextMembers,
+      });
+    }
+
     client.emit('disconnected', {
       socketId: client.id,
     });
@@ -78,6 +120,25 @@ export class NoteGateway
 
     await client.join(room.data.id);
 
+    const currentMembers = this.roomMembers.get(room.data.id) ?? [];
+    const filteredMembers = currentMembers.filter(
+      (member) => member.socketId !== client.id,
+    );
+    const updatedMembers = [
+      ...filteredMembers,
+      {
+        socketId: client.id,
+        userId: (client.data as SocketData).userId,
+      },
+    ];
+
+    this.roomMembers.set(room.data.id, updatedMembers);
+
+    this.server.to(room.data.id).emit('room_presence', {
+      roomId: room.data.id,
+      members: updatedMembers,
+    });
+
     return {
       status: 'success',
       message: `Joined room ${room.data.id}`,
@@ -86,8 +147,12 @@ export class NoteGateway
   }
 
   @SubscribeMessage('get_note_snapshot')
-  async handleGetNoteSnapshot(client: Socket, payload: GetNoteSnapshotPayload) {
-    const note = await this.noteService.getNoteSnapshot(payload.roomName!);
+  async handleGetNoteSnapshot(
+    client: Socket,
+    payload: GetNoteSnapshotPayload,
+  ): Promise<{ status: string; data: Note }> {
+    const room = await this.resolveRoom(payload);
+    const note = await this.noteRepository.createOrGetNote(room.data.id);
 
     return {
       status: 'success',
@@ -96,7 +161,14 @@ export class NoteGateway
   }
 
   @SubscribeMessage('update_note')
-  async handleUpdateNote(client: Socket, payload: UpdateNotePayload) {
+  async handleUpdateNote(
+    client: Socket,
+    payload: UpdateNotePayload,
+  ): Promise<{
+    status: string;
+    message: string;
+    data: Note;
+  }> {
     const room = await this.resolveRoom(payload);
     const content = payload.content ?? payload.noteContent;
 
@@ -105,8 +177,8 @@ export class NoteGateway
     }
 
     const clientVersion = payload.clientVersion ?? 0;
-    const result = await this.noteService.updateNote(
-      payload.roomName!,
+    const result = await this.noteRepository.updateNote(
+      room.data.id,
       content,
       clientVersion,
     );
@@ -142,10 +214,18 @@ export class NoteGateway
   }
 
   private async resolveRoom(payload: RoomLookupPayload) {
-    if (payload.roomName) {
-      return await this.roomService.get_room_by_name(payload.roomName);
+    if (!payload.roomName) {
+      throw new WsException('roomName is required');
     }
 
-    throw new WsException('roomId or roomName is required');
+    try {
+      return (await this.roomService.get_room_by_name(
+        payload.roomName,
+      )) as RoomResponse;
+    } catch (error) {
+      throw new WsException(
+        error instanceof Error ? error.message : 'Unable to resolve room',
+      );
+    }
   }
 }

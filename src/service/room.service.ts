@@ -7,7 +7,7 @@ import { RoomRepository } from 'src/repository/room.repository';
 export class RoomService {
   constructor(private readonly roomRepository: RoomRepository) {}
 
-  async create_room(dto: CreateRoomRequest) {
+  async create_room(dto: CreateRoomRequest): Promise<{ data: Room }> {
     if (await this.roomRepository.get_room_by_name(dto.name)) {
       throw new BadRequestException('Room name already exists');
     }
@@ -16,7 +16,7 @@ export class RoomService {
     return { data: room };
   }
 
-  async get_room_by_name(name: string) {
+  async get_room_by_name(name: string): Promise<{ data: Room }> {
     const room: Room | null = await this.roomRepository.get_room_by_name(name);
 
     if (!room) {

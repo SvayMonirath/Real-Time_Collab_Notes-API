@@ -4,140 +4,155 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <title>Realtime Notes WS Demo</title>
+  <title>Realtime Notes Demo</title>
   <style>
-    :root {
-      --bg: #0b1320;
-      --panel: #101a2b;
-      --panel-2: #152239;
-      --text: #e6eefc;
-      --muted: #9db0d1;
-      --ok: #2ed47a;
-      --warn: #ffcc66;
-      --err: #ff6b6b;
-      --border: #243758;
-      --accent: #4ea1ff;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      background: radial-gradient(circle at top right, #1d3257, var(--bg));
-      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f4f2;
+      color: #111;
     }
 
-    .wrap {
-      max-width: 1100px;
+    .page {
+      max-width: 1200px;
       margin: 24px auto;
-      padding: 16px;
-      display: grid;
-      gap: 16px;
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .card {
-      background: linear-gradient(160deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
-    }
-
-    .full {
-      grid-column: 1 / -1;
+      padding: 0 16px 24px;
     }
 
     h1,
-    h2 {
-      margin: 0 0 12px 0;
+    h2,
+    h3,
+    p {
+      margin: 0 0 12px;
     }
 
-    h1 {
-      font-size: 20px;
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      border-bottom: 1px solid #d6d6d2;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
     }
 
-    h2 {
-      font-size: 15px;
-      color: var(--muted);
+    .status {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .status.ok {
+      color: #0f6b3e;
+    }
+
+    .status.err {
+      color: #9b1c1c;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
     }
 
     label {
       display: block;
-      margin: 10px 0 6px;
-      font-size: 12px;
-      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #444;
     }
 
     input,
     textarea,
     button {
       width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 9px 10px;
+      box-sizing: border-box;
       font: inherit;
-      color: var(--text);
-      background: #0d1627;
+      border: 1px solid #cfcfcf;
+      border-radius: 6px;
+      padding: 10px 12px;
+      background: #fff;
     }
 
     textarea {
-      min-height: 180px;
+      min-height: 220px;
       resize: vertical;
     }
 
     button {
       cursor: pointer;
-      background: #12325f;
+      background: #111;
+      color: #fff;
     }
 
-    button:hover {
-      background: #18457f;
+    button.secondary {
+      background: #f1f1ef;
+      color: #111;
     }
 
-    .row {
+    .buttons {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
+      gap: 8px;
     }
 
-    .status {
+    .buttons.three {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .section {
+      margin-top: 16px;
+    }
+
+    .muted {
+      color: #666;
       font-size: 13px;
-      color: var(--warn);
     }
 
-    .ok {
-      color: var(--ok);
+    .list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
     }
 
-    .err {
-      color: var(--err);
+    .list li {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #fafafa;
     }
 
     pre {
       margin: 0;
       white-space: pre-wrap;
       word-break: break-word;
-      background: #0b1422;
-      border: 1px solid var(--border);
+      font-size: 13px;
+      line-height: 1.45;
+      background: #0f1115;
+      color: #e9ecef;
       border-radius: 8px;
-      padding: 10px;
-      min-height: 250px;
-      max-height: 400px;
+      padding: 12px;
+      min-height: 260px;
       overflow: auto;
     }
 
-    .hint {
-      margin-top: 8px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
     @media (max-width: 900px) {
-      .wrap {
+      .grid {
         grid-template-columns: 1fr;
       }
     }
@@ -146,93 +161,144 @@
 </head>
 
 <body>
-  <div class="wrap">
-    <div class="card full">
-      <h1>Realtime Notes WebSocket Demo</h1>
+  <div class="page">
+    <div class="topbar">
+      <div>
+        <h1>Realtime Notes Demo</h1>
+        <p class="muted">Use this page to test auth, rooms, presence, and note sync.</p>
+      </div>
       <div id="status" class="status">Disconnected</div>
     </div>
 
-    <div class="card">
-      <h2>Connection</h2>
-      <label for="serverUrl">Server URL</label>
-      <input id="serverUrl" value="http://localhost:3000" />
+    <div class="grid">
+      <div class="card stack">
+        <h2>Connection</h2>
 
-      <label for="token">JWT Token</label>
-      <input id="token" placeholder="Paste a valid JWT token" />
+        <div>
+          <label for="serverUrl">Socket Server URL</label>
+          <input id="serverUrl" value="http://localhost:8001" />
+        </div>
 
-      <div class="row" style="margin-top: 10px">
-        <button id="connectBtn">Connect</button>
-        <button id="disconnectBtn">Disconnect</button>
+        <div>
+          <label for="token">JWT Token</label>
+          <input id="token" placeholder="Paste access token here" />
+        </div>
+
+        <div class="buttons">
+          <button id="connectBtn">Connect</button>
+          <button id="disconnectBtn" class="secondary">Disconnect</button>
+        </div>
+
+        <div class="section">
+          <h2>Room</h2>
+          <div class="stack">
+            <div>
+              <label for="roomName">Room Name</label>
+              <input id="roomName" value="test-room" />
+            </div>
+
+            <div class="buttons three">
+              <button id="createRoomBtn">Create Room</button>
+              <button id="joinBtn">Join Room</button>
+              <button id="snapshotBtn" class="secondary">Snapshot</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Connected Users</h2>
+          <div class="muted" id="currentRoomLabel">No room joined</div>
+          <ul id="presenceList" class="list" style="margin-top: 10px"></ul>
+        </div>
       </div>
 
-      <label for="roomName">Room Name</label>
-      <input id="roomName" value="test-room" />
+      <div class="card stack">
+        <h2>Note</h2>
 
-      <div class="row" style="margin-top: 10px">
-        <button id="joinBtn">Join Room</button>
-        <button id="snapshotBtn">Get Snapshot</button>
+        <div>
+          <label for="clientVersion">Client Version</label>
+          <input id="clientVersion" type="number" value="0" min="0" />
+        </div>
+
+        <div>
+          <label for="noteContent">Content</label>
+          <textarea id="noteContent" placeholder="Write the shared note here"></textarea>
+        </div>
+
+        <div class="buttons">
+          <button id="updateBtn">Send update_note</button>
+          <button id="syncVersionBtn" class="secondary">Use Latest Version</button>
+        </div>
+
+        <div class="section">
+          <h2>Event Log</h2>
+          <pre id="log"></pre>
+        </div>
       </div>
-
-      <div class="hint">
-        Use two browser tabs with the same room to verify real-time sync.
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Note Editor</h2>
-      <label for="clientVersion">Client Version</label>
-      <input id="clientVersion" type="number" value="0" min="0" />
-
-      <label for="noteContent">Content</label>
-      <textarea id="noteContent" placeholder="Type note content here"></textarea>
-
-      <div class="row" style="margin-top: 10px">
-        <button id="updateBtn">Send update_note</button>
-        <button id="syncVersionBtn">Use Latest Version</button>
-      </div>
-    </div>
-
-    <div class="card full">
-      <h2>Event Log</h2>
-      <pre id="log"></pre>
     </div>
   </div>
 
   <script>
     let socket = null;
     let latestVersion = 0;
+    let joinedRoomName = '';
+    let currentMembers = [];
 
     const ui = {
       status: document.getElementById('status'),
-      log: document.getElementById('log'),
       serverUrl: document.getElementById('serverUrl'),
       token: document.getElementById('token'),
       roomName: document.getElementById('roomName'),
       clientVersion: document.getElementById('clientVersion'),
       noteContent: document.getElementById('noteContent'),
+      log: document.getElementById('log'),
       connectBtn: document.getElementById('connectBtn'),
       disconnectBtn: document.getElementById('disconnectBtn'),
+      createRoomBtn: document.getElementById('createRoomBtn'),
       joinBtn: document.getElementById('joinBtn'),
       snapshotBtn: document.getElementById('snapshotBtn'),
       updateBtn: document.getElementById('updateBtn'),
       syncVersionBtn: document.getElementById('syncVersionBtn'),
+      presenceList: document.getElementById('presenceList'),
+      currentRoomLabel: document.getElementById('currentRoomLabel'),
     };
 
     function logEvent(event, payload) {
       const stamp = new Date().toISOString();
-      const line = `[${stamp}] ${event}\n${JSON.stringify(payload ?? {}, null, 2)}\n\n`;
-      ui.log.textContent = line + ui.log.textContent;
+      ui.log.textContent = `[${stamp}] ${event}\n${JSON.stringify(payload ?? {}, null, 2)}\n\n` + ui.log.textContent;
     }
 
-    function setStatus(text, kind) {
+    function setStatus(text, kind = '') {
       ui.status.textContent = text;
-      ui.status.className = `status ${kind || ''}`;
+      ui.status.className = `status ${kind}`.trim();
     }
 
-    function updateVersion(v) {
-      if (typeof v !== 'number') return;
-      latestVersion = v;
-      ui.clientVersion.value = String(v);
+    function setLatestVersion(version) {
+      if (typeof version !== 'number') return;
+      latestVersion = version;
+      ui.clientVersion.value = String(version);
+    }
+
+    function setPresence(roomName, members) {
+      joinedRoomName = roomName || joinedRoomName;
+      currentMembers = Array.isArray(members) ? members : [];
+      ui.currentRoomLabel.textContent = joinedRoomName
+        ? `Room: ${joinedRoomName}`
+        : 'No room joined';
+      ui.presenceList.innerHTML = '';
+
+      if (currentMembers.length === 0) {
+        const empty = document.createElement('li');
+        empty.textContent = 'No connected users found.';
+        ui.presenceList.appendChild(empty);
+        return;
+      }
+
+      for (const member of currentMembers) {
+        const item = document.createElement('li');
+        item.textContent = `${member.userId || 'unknown'}  |  ${member.socketId}`;
+        ui.presenceList.appendChild(item);
+      }
     }
 
     function ensureSocket() {
@@ -241,6 +307,42 @@
         return false;
       }
       return true;
+    }
+
+    async function createRoom() {
+      const roomName = ui.roomName.value.trim();
+      const serverUrl = ui.serverUrl.value.trim();
+
+      if (!roomName) {
+        alert('Room name is required');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${serverUrl}/room`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: roomName }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          setStatus(`Create room failed (${response.status})`, 'err');
+          logEvent('room.create_error', { status: response.status, data });
+          return;
+        }
+
+        setStatus(`Room created: ${roomName}`, 'ok');
+        logEvent('room.create_success', data);
+      } catch (error) {
+        setStatus('Create room request failed', 'err');
+        logEvent('room.create_exception', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     }
 
     ui.connectBtn.addEventListener('click', () => {
@@ -272,6 +374,16 @@
         logEvent('socket.connect_error', { message: err.message });
       });
 
+      socket.on('exception', (payload) => {
+        setStatus('Server exception', 'err');
+        logEvent('socket.exception', payload);
+      });
+
+      socket.on('error', (payload) => {
+        setStatus('Socket error', 'err');
+        logEvent('socket.error', payload);
+      });
+
       socket.on('disconnect', (reason) => {
         setStatus(`Disconnected: ${reason}`, 'err');
         logEvent('socket.disconnect', { reason });
@@ -285,12 +397,17 @@
         logEvent('disconnected', payload);
       });
 
+      socket.on('room_presence', (payload) => {
+        logEvent('room_presence', payload);
+        setPresence(payload.roomId || joinedRoomName, payload.members);
+      });
+
       socket.on('note_updated', (payload) => {
         logEvent('note_updated', payload);
         if (typeof payload.content === 'string') {
           ui.noteContent.value = payload.content;
         }
-        updateVersion(payload.version);
+        setLatestVersion(payload.version);
       });
 
       socket.on('note_conflict', (payload) => {
@@ -298,7 +415,7 @@
         if (typeof payload.latestContent === 'string') {
           ui.noteContent.value = payload.latestContent;
         }
-        updateVersion(payload.latestVersion);
+        setLatestVersion(payload.latestVersion);
       });
     });
 
@@ -310,13 +427,40 @@
       }
     });
 
+    ui.createRoomBtn.addEventListener('click', createRoom);
+
     ui.joinBtn.addEventListener('click', () => {
       if (!ensureSocket()) return;
 
       const roomName = ui.roomName.value.trim();
+
+      if (!roomName) {
+        alert('Room name is required');
+        return;
+      }
+
+      let ackReceived = false;
+
       socket.emit('join_room', { roomName }, (ack) => {
+        ackReceived = true;
         logEvent('ack.join_room', ack);
+
+        if (ack?.status === 'success') {
+          joinedRoomName = roomName;
+          ui.currentRoomLabel.textContent = `Room: ${roomName}`;
+          setStatus('Joined room successfully', 'ok');
+        }
       });
+
+      window.setTimeout(() => {
+        if (!ackReceived) {
+          setStatus('No join_room ack received', 'err');
+          logEvent('ack.join_room_timeout', {
+            roomName,
+            message: 'No ack in 3 seconds. Check server logs and room name.',
+          });
+        }
+      }, 3000);
     });
 
     ui.snapshotBtn.addEventListener('click', () => {
@@ -329,7 +473,7 @@
           if (typeof ack.data.content === 'string') {
             ui.noteContent.value = ack.data.content;
           }
-          updateVersion(ack.data.version);
+          setLatestVersion(ack.data.version);
         }
       });
     });
@@ -341,21 +485,19 @@
       const content = ui.noteContent.value;
       const clientVersion = Number(ui.clientVersion.value);
 
-      socket.emit(
-        'update_note',
-        { roomName, content, clientVersion },
-        (ack) => {
-          logEvent('ack.update_note', ack);
-          if (ack && ack.data && typeof ack.data.version === 'number') {
-            updateVersion(ack.data.version);
-          }
-        },
-      );
+      socket.emit('update_note', { roomName, content, clientVersion }, (ack) => {
+        logEvent('ack.update_note', ack);
+        if (ack && ack.data && typeof ack.data.version === 'number') {
+          setLatestVersion(ack.data.version);
+        }
+      });
     });
 
     ui.syncVersionBtn.addEventListener('click', () => {
       ui.clientVersion.value = String(latestVersion);
     });
+
+    setPresence('', []);
   </script>
 </body>
 
