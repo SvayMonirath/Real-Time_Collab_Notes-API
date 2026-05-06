@@ -3,11 +3,10 @@ import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 export class UpdateNoteRequest {
   @IsString()
   @IsNotEmpty()
-  roomName: string;
+  roomName!: string;
 
   @IsString()
-  @IsNotEmpty()
-  content: string;
+  content!: string;
 
   @IsNumber()
   @IsOptional()
@@ -17,5 +16,5 @@ export class UpdateNoteRequest {
 export class GetNoteSnapshotRequest {
   @IsString()
   @IsNotEmpty()
-  roomName: string;
+  roomName!: string;
 }

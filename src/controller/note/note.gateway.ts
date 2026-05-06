@@ -172,7 +172,7 @@ export class NoteGateway
     const room = await this.resolveRoom(payload);
     const content = payload.content ?? payload.noteContent;
 
-    if (!content) {
+    if (content === undefined || content === null) {
       throw new WsException('content is required');
     }
 
